@@ -1,0 +1,164 @@
+
+第一 怎么编译 调用 线程库
+	查看 pthread头文件 可以知道 编译的提醒
+	
+SYNOPSIS
+       #include <pthread.h>
+
+       int pthread_create(pthread_t *thread, const pthread_attr_t *attr,
+                          void *(*start_routine) (void *), void *arg);
+
+       Compile and link with -pthread.
+		
+		pthread_self
+		%lu 类型 long unsigned 
+		
+第二步： 线程的控制
+		创建线程 
+		
+		取消线程 （需要在线程流水线里面 埋放一个取消点函数   
+					得有发送 取消信号 
+					可以考虑 死循环的 取消 罢了 
+					） 
+		
+		线程分离（孤儿线程 线程执行完就系统回收 而不是 当前进程回收） 
+		pthread_join(pthread_id[id], NULL);
+		
+		以及线程回收。
+		
+		属性那块 暂时不管先。
+		
+关于线程的返回：
+	------------------------------
+	return：返回到调用者那里去。 线程尚未结束 mian 不能随便return 
+	pthread_exit()：将调用该函数的线程终止			
+	exit: 将进程退出。
+	
+	---------------------------------------------
+	
+第三步： 线程的同步 以及通信
+
+		同步的机制 基本就一种 信号量 记住 这里的是 计数类型的信号量 // 头文件 <semaphore.h>
+		互斥锁 是为了临界区而已	
+		条件变量是为了 减少 竞争 而已。（条件变量的 前提是 已经抢到 锁了）;
+		
+
+
+
+code_task_1:
+	创建一个 线程 并打印自己的 线程ID 就退出
+	主控线程 休眠一秒
+	
+
+	
+	记住竞争的结果是不定的
+code_task_2:
+	创建 两个任务 各自写入 自己的循环打印次数 到全局变量  然后 打印输出 
+	如果 不加锁的 情况下 会发生 被不连续 被打断的 现象
+	
+	加了锁之后，原子操作 ,
+	打断现象是不存在。
+	竞争的结果不定，虽然都打印50次但是 顺序 连续。
+	
+code_task_3:
+
+	使用信号量同步机制
+	创建 两个任务 对全局数组 写入 自己的函数名再 读取出来 输出到屏幕上；
+	发现，
+	
+	   
+	----------------------
+main.c: In function ‘my_start_routine’:
+main.c:4:1: error: parameter name omitted
+ void* my_start_routine(void *)
+----------------------------------------
+
+需要提供一个 参数名字啊！！！
+
+
+关于 线程属性 堆栈 优先级 等等 
+	线程分离 也就是 线程 是否是 孤儿线程， 如果是的话 由系统直接回收  而不是 进程 或者说 主控线程。。。
+	
+
+	
+	如果是多线程 编程尽量使用 pthread_exit(NULL)：
+	
+	-----------------------------------------------------
+	
+#if 1
+
+	pthread_attr_t attr;			/*通过线程属性来设置游离态*/
+	pthread_attr_init(&attr);
+	pthread_attr_setdetachstate(&attr,	PTHREAD_CREATE_DETACHED);
+	pthread_create(&tid, &attr, tfn, NULL);
+
+#else
+
+	pthread_create(&tid, NULL, tfn, NULL);
+	pthread_detach(tid);         //让线程分离  ----自动退出,无系统残留资源
+
+#endif
+	
+================================================================================
+
+总结：终止某个线程而不终止整个进程，有三种方法：
+1.	从线程主函数return。这种方法对主控线程不适用，从main函数return相当于调用exit。
+2.	一个线程可以调用pthread_cancel终止同一进程中的另一个线程。
+3.	线程可以调用pthread_exit终止自己。
+
+
+=====================================================================================
+
+	含有线程的 进程 尽量 不要使用 fork函数 
+	也会创建线程的 
+	5.	信号的复杂语义很难和多线程共存，应避免在多线程引入信号机制
+	========================================
+
+	线程 同步 
+	条件变量 和 竞争的 语义不一样
+	条件变量 不引起 竞争
+	竞争 是有输有赢  赢的 持锁 然后 进入 临界区；
+	条件变量 不存在竞争 ；
+	
+	使用机制有：
+		锁
+		条件变量 有一个 前提 那就是 条件变量 抢到锁了 ， 然后 条件变量 才回去 释放锁。
+		条件变量只是 减少竞争而已 
+		
+		pthread_mutex_lock(&lock);
+        while (head == NULL) {           //头指针为空,说明没有节点    可以为if吗
+            pthread_cond_wait(&has_product, &lock);
+        }
+
+		信号量 等等 头文件 <semaphore.h> 
+		注意 这个信号量 是一个 计数型的 信号量。。。。。。。。。。。
+		会出现 多次post的现象。。。。。。。。。。那么 多次 wait都是可以立刻返回的。
+		
+		
+参2：互斥量属性。是一个传入参数，通常传NULL，选用默认属性(线程间共享)。 参APUE.12.4同步属性
+1.	静态初始化：如果互斥锁 mutex 是静态分配的（定义在全局，或加了static关键字修饰），可以直接使用宏进行初始化。e.g.  pthead_mutex_t muetx = PTHREAD_MUTEX_INITIALIZER;
+2.	动态初始化：局部变量应采用动态初始化。e.g.  pthread_mutex_init(&mutex, NULL)
+	----------------------------------------------
+	sem_t *s = mmap(NULL, sizeof(sem_t) * 5, PROT_READ|PROT_WRITE, MAP_SHARED|MAP_ANON， -1， 0); //进程 可能会 fork而已。。。不建议 使用全局变量的原因。
+	
+	sem_init(&s[i], 0, 1); 将信号量初值设为1，信号量变为互斥锁。
+	其实就是这样使用而已。
+	malloc就是支持数组的操作。。。别傻逼了	
+	---------------------------------------
+	
+	int pthread_cond_wait(pthread_cond_t *__restrict__ __cond, pthread_mutex_t *__restrict__ __mutex)
+	Wait for condition variable COND to be signaled or broadcast.
+	MUTEX is assumed to be locked before.
+	
+	现在 来了解一下 mmap函数的用法看看
+	SYNOPSIS
+       #include <sys/mman.h>
+
+       void *mmap(void *addr, size_t length, int prot, int flags,
+                  int fd, off_t offset);
+       int munmap(void *addr, size_t length);
+	man 2 mmap看看参数就好~~~ 建议 匿名映射吧。
+	-------------------------------------------------------------
+	
+
+	-------------------------------------
