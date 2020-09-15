@@ -1,0 +1,201 @@
+
+
+多路转IO：
+	实现监听一堆文件的状态，比如 可读 可写 异常等。
+
+	常常使用的函数有 
+	selete()
+	
+    int select(int nfds, fd_set *readfds, fd_set *writefds,
+                  fd_set *exceptfds, struct timeval *timeout);
+	
+	int max_fd = listen_fd;
+	int cur_index = max_fd;
+	int ret_even_num = 0;
+	while (1)
+	{
+		ret_even_num = select(max_fd + 1, &r_set, NULL, NULL, NULL);
+	}
+	根据函数API 可以知道
+	函数返回事件的总和， 不指名对应的文件描述符号 以及 对应文件描述符号的事件类型（是传入传出参数）；
+	
+	编程上： 分两步
+	调用时 -> 你需要 设置 监听描述符的上限，开区间；以及 传入你需要监听的事件类型；
+	返回时 -> 你需要 遍历 所设置的 三个事件 表 做对应处理；
+	再次调用需要 重新设置 监听事件表格；
+	----------------------------------
+	站在服务器的角度考虑：
+	可读事件的发生，有两种可能， 
+	第一： 客户端请求TCP链接 -------> 这个对应 socket_fd	-----> TCP 三次握手
+	第二： 客户端发送数据过来------> 这个对应 cilent_fd  ---->数据传输
+	
+	程序上 优先处理 可读事件 如果是 socket_fd可读 那么就需要 accept()响应三次握手， 并保留追加 客户端描述符
+	
+---------------------------------------------	
+   void FD_CLR(int fd, fd_set *set);
+   int  FD_ISSET(int fd, fd_set *set);
+   void FD_SET(int fd, fd_set *set);
+   void FD_ZERO(fd_set *set);
+   
+  --------------------------
+  
+现在编写一个 服务器：
+	
+	实现： 支持20个最大连接数量,客户端连接进来则 打印连接的客户端信息；数据处理稍后追加
+	
+	第一： socke里面的结构体都是 大端字节序  需要转换;
+			
+			bzero(&server_addr, sizeof(server_addr));
+			server_addr.sin_family = AF_INET;
+			inet_pton(AF_INET, SERVER_IP, &server_addr.sin_addr);
+			server_addr.sin_port = htons(SERVER_PORT);
+	
+	------------------------------------------------------------------
+	
+	第二步 配置服务器
+	    listen_fd = socket(AF_INET, SOCK_STREAM, 0);
+		bind(listen_fd, (struct sockaddr *)&server_addr, sizeof(server_addr));
+		listen(listen_fd, 100);
+	
+	第三步
+		accept才是 传入传出
+	
+	
+	select一次返回 只能是一个建立 SOCK链接 多个客户端请求数据处理的情况；
+	
+	所以 优先处理 是否 建立SOCK 数据通道 事件 并且 select返回1 
+	如果是 也就是说明没有 数据传输请求 直接回到 上面的select继续处理
+	
+	如何处理 accpet返回的 数据通道描述符？
+	
+	模型： 建立一个自己的 文件描述符数组
+	client[1024];
+	
+	后续的就是 去维护这个数组
+	维护这个数组 需要指标，  当前最大上限，
+	思路： 找到数组里面 第一个 小于 0 的索引，
+	然后 保存；
+	判断 是否 需要更新一下索引的上限，
+	
+	需要维护 两个 文件描述符数组：
+	
+	一个是  accpet返回的， 需要和 系统的打开文件描述符 对比
+	看看 是否 需要 更新 select 的第一个参数
+	
+	另外一个 是自己的数据通道描述符数组，  用于 数据通道遍历描述符号 上限；
+	==================================
+	关于poll 
+	SYNOPSIS
+	#include <poll.h>
+
+	int poll(struct pollfd *fds, nfds_t nfds, int timeout);
+
+==========================================================
+	int select(int nfds, fd_set *readfds, fd_set *writefds,
+			  fd_set *exceptfds, struct timeval *timeout);
+
+   void FD_CLR(int fd, fd_set *set);
+   int  FD_ISSET(int fd, fd_set *set);
+   void FD_SET(int fd, fd_set *set);
+   void FD_ZERO(fd_set *set);
+   =========================
+   
+   本质上 其实 没有任何 变化 只是
+   把 select 的参数 fd_set *readfds, fd_set *writefds, fd_set *exceptfds,
+   封装到 struct pollfd *fds 里面而已。
+              struct pollfd {
+               int   fd;         /* file descriptor */
+               short events;     /* requested events */
+               short revents;    /* returned events */
+           };
+	此时， 需要监听的 和 返回的 就分开了 
+	
+	----------------------------------------------------------------------------
+	现在 就变成了 需要维护的是 系统的文件描述符 以及 poll里面的最大描述符号范围了
+	记住 通过监听描述符号 去维护 数据描述符。。。。
+	可以理解为 socket描述符 和 accpet描述符！！！！
+	
+	accpet 返回的进程描述符 需要 和 poll 函数里面的传入参数对比
+	同时 需要 设置 改描述符号对应的 监听事件 以及添加 进数据描述符表
+	
+	不需要了 就是 nfds 就是 用户自己维护的 标的上限 不是 进程描述表的上限了。
+	
+	用户 自行去维护 自己建立的 客户端符号表 
+	和 select需要记录 进程的 文件描述符；
+	
+	-------------------------------------------------------------------------
+	
+	-----------------------------------------------------------------------------
+	epoll机制貌似是最简单的一种。。。。。。
+	=================================================
+	getsockname
+	根据accpet返回的sockfd，得到临时端口号 
+	得到的是本地的 9527？？？？
+	getpeername
+	根据accpet返回的sockfd，得到远端链接的端口号，在exec后可以获取客户端信息。
+	这个可以得到对应 的 客户端登录信息
+	
+	-------------------------------------------------------------------------
+	connect_fd = accept(poll_fd[LISTEN_FD].fd, (struct sockaddr *)&client_addr, &sock_len);
+	得到的信息 
+	-------------------------------------------------------------------------
+	getpeername
+	根据accpet返回的sockfd，得到远端链接的端口号，在exec后可以获取客户端信息。
+	这个可以得到对应 的 客户端登录信息
+	--------------------------------------------------------------------------
+	
+	有域名的这个概念~~~
+	-------------------------------------
+	//////注意这个了
+	设置的 是event;
+	返回 查询的是 reevent;
+	
+   ====================================================
+   
+    int poll(struct pollfd *fds, nfds_t nfds, int timeout);
+
+  --------------------------
+	关于epoll()的操作
+	创建一颗二叉树：
+	epoll_create
+	epoll_ctl
+	
+	epoll_wait
+	-----------
+	int epoll_df = epoll_create(50);
+	
+	int epoll_ctl(int epfd, int op, int fd, struct epoll_event *event);
+	
+	op:
+		EPOLL_CTL_ADD
+		EPOLL_CTL_MOD
+		EPOLL_CTL_DEL
+
+   typedef union epoll_data {
+	   void        *ptr;
+	   int          fd;
+	   uint32_t     u32;
+	   uint64_t     u64;
+   } epoll_data_t;
+
+   struct epoll_event {
+	   uint32_t     events;      /* Epoll events */
+	   epoll_data_t data;        /* User data variable */
+   };
+
+
+       EPOLLIN
+              The associated file is available for read(2) operations.
+
+       EPOLLOUT
+              The associated file is available for write(2) operations.
+
+	==============
+	int epoll_wait(int epfd, struct epoll_event *events,
+                      int maxevents, int timeout);
+
+	原来 如此 树 是用户设置的 而 struct epoll_event *events这个是传出参数。。。
+	会对传入的 buff进行排序缓存了  并返回 有效的个数。
+	
+	==========================================================
+	
