@@ -357,6 +357,20 @@ module_init(__driver##_init); \
 
 #define device_initcall(fn)		__define_initcall(fn, 6)
 
+1、arch_initcall，level=3，用在arch级的初始化，比如machine_init，如目录/arch/arm/mach-s3cxx下。
+
+2、subsys_initcall，level=4，顾名思义，用在子系统中，比如IIC、SPI、USB、SD、PCI等子系统的初始化，如子系统的总线驱动中，目录/drivers/i2c/busses下。
+
+3、module_init，即device_initcall，level=6，用在设备驱动中，这个对于驱动开发者来说就比较熟悉了，用的比较多。
+
+
+这里 理解一下：
+
+	子系统的初始化 需要SOC平台的信息， 也就是 说 子系统的初始化 应该是在 设备树的设备信息  注册了平台总线之后 展开的
+	而 模块 又是 基于 各个子系统的 开发  比如 中断 比如 IIC总线  引脚 等等
+	所以 模块的 初始化 应该 是在子系统之后 初始化的
+	
+	平台总线 应该是 对 SOC 的一个抽象了
 
 这里表明 自己写的驱动 等级就是 先注册的驱动 而不是设备了 ;
 =========================================================
