@@ -82,6 +82,13 @@ gcc -o main main.o libtest.so //可以成功
   
   与静态库不同的是，程序运行时需要动态库的支持，如果找不到相应的动态库，程序运行会报错。
   ================================================================================================================
-  
+  < targets ....> : < target-pattern > : < prereq-patterns ...>
+    <commands>
+  $(OBJS) : $(BULID_DIR)/A520/project/Standard/bulid/board/%.o: %.c
+	$(CC) -D_GNU_SOURCE -DBULID_LIB $(BOARD_DEFINE) $(HA_DEFINE) $(CFLAGS) $(LIBS) $(INC) -c $(patsubst %.o,%.c,$(subst 
+模式的意思就是 条件的意思;
+=====================================================================================
+    
+    
   
  
