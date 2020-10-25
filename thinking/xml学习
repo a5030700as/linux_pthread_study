@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8" ?>
+
+<bookstore>
+
+    <book id="first">
+
+        <title>JavaWeb</title>
+
+        <author>哈哈</author>
+
+        <price>49</price>
+
+    </book>
+
+    <book id="second">
+
+        <title>Web</title>
+
+        <author>哈哈</author>
+
+        <price>50</price>
+
+    </book>
+
+
+
+</bookstore>
+========================================================================
+对比 key value 
+标签对 就是 key 内容就是 value 同样的 标签 通过 id来识别就好 这个是 标签内属性 因此 是要加 双引号 的 不是 标签内元素
+
+至于 相关的 C库函数 暂时不了解先 
+
+xml 会被解析为 dom树的， 这个过程 和 设备树 被 迁移到内核 是一样的
+
+元素 下 有 属性 和 文本信息
+属性 也是 用到了 字典的方式去保存而已。
+
+
+==========================

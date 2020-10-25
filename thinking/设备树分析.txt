@@ -1,0 +1,175 @@
+
+1 为什么要引入设备树呢？
+
+	方便移植。 对比之前的 硬编码机制， 确实不灵活。
+	
+2 设备树 是描述 BSP 的语言； 是描述 SOC 的reg的 语言；
+	基本语法略过
+	怎么去描述 reg clk irq 以及 各种 外设的接口（IIC SPI SERIAL）呢？	
+
+3 设备树的文件组织
+
+	dts的板级描述 以及 dtsi平台文件的描述 以及 binds文件的 宏定义 也就是 对 编码的解释。
+	
+	dts是设备树的 源码 也是 设备树的根节点的 入口; 
+	因为 重名属性 覆盖 原则 某种意义上 根节点 没啥意义 只要只有一个 dts就是这个入口就好  顺着这个文件 摸上去
+	
+	dtsi平台文件的描述 头文件
+	binds文件的 一些 宏定义 方便阅读 解释 中断号 毕竟没人去记忆中断
+	
+以 讯为 4412  dts为例子 exynos4412-itop
+
+#include <dt-bindings/pwm/pwm.h> 			// 宏常量
+#include <dt-bindings/sound/samsung-i2s.h> 	//宏常量
+#include <dt-bindings/gpio/gpio.h>			// 宏常量
+#include <dt-bindings/input/input.h>		// 宏常量
+
+#include "exynos4412-itop-scp-core.dtsi"
+
+	
+	
+4 	哪几类的人员会涉及到设备树呢？
+	子系统开发人员（SOC原厂） 、 内核维护人员、底层驱动人员 
+	
+	内核是分层的， 我始终觉得 初级驱动工程师  就是 介于 内核的子系统 和 进程层 的中间层次。
+	也可以 从 初始化 等级流程 里面看出  先初始化 core---arch---subsys----device(module)----post //写驱动 就是在 device 之后
+	
+	内核是分层的 引入子系统的 概念 就是 为了屏蔽 各个不同SOC 厂商 的差异 实现统一的接口， SOC 厂商负责的就是 按照 内核的 子系统标准 去填充自己的 驱动 以及方法 等等；
+	设备树文件 也是内核 驱动的 必须文件之一， 因为内核启动的时候 需要通过 u-boot传递的 设备树地址 去确定 内存的分区 以及 文件系统的 挂载地址 等等。。。
+	
+	因此 在内核的 arch\arm\boot\dts 目录下。
+	arch(cpu架构)-----soc(厂商)--------bsp（电路板）-------
+	arm公司下也有很多CPU架构 arc/arm/....
+	
+			
+5 设备树的官方文档 以及 相关的例程 哪里找呢？
+	
+	内核会提供一份 各个子系统 的 设备树 规范
+	各个SOC 也会 提供一份 自己的 设备树 规范 以接入到 内核的各个子系统， 内核 是 一个大纲 ， SOC 是具体的 实现细节吧。有点懵逼。。。
+	
+	5.1 以exynos4d的设备树文档和GPIO为例，简单介绍官方文档
+	Documentation/devicetree/usage-model.txt // 内核的子系统 设备树
+	
+	Documentation/devicetree/bindings/gpio/gpio-samsung.txt	 // SOC 的设备树 规范	
+	
+====================================================================
+6	=======================================================
+	proc/device-tree/
+	这个目录下就是 设备树展开的 文件系统了  节点名字就是 目录名字 属性 就是 文件名字 和 内容
+	这里只是 设备树的 文件表现形式 不代表 该设备 已经被 内核所驱动 或者 注册到平台总线
+	需要到
+	sys/devices/platform目录下查看才能进行 才知道设备注册没注册。
+================================================================	
+
+7 	
+	1个dts文件+n个dtsi文件，它们编译而成的dtb文件就是真正的设备树
+	如果一个节点是属性节点（即仅仅是作为属性被其他节点调用），那么它定义在哪里其实无所谓，重要的是调用的位置，
+	比如lcd屏幕的时序，其实我们完全可以把它定义在其他犄角旮旯，然后在lcd节点下用&来调用它，
+	这也是可以的。这有点类似于函数：在哪定义不重要，重要的是在哪调用
+	所谓标号引用，就是在节点名称前加上标号，这样设备树的其他位置就能够通过&符号来调用/访问该节点
+	
+	&adc { //表示引用
+			对该节点属性进行 覆盖操作。
+		}
+	==============================
+8
+==================================================================	
+	你要清楚  平台的 设备模型 还是没有改变 ，
+		或者说 这个就是在 平台设备模型的 基础上 引入的 一个叫做 设备树的概念。
+			设备树文件里面的信息 会被一开始 迁移到内核里面， 但是 还没 注册 到平台总线里面；
+				在最后才追加的 do_base_哪里；
+	简而言之： 所有节点：proc/device-tree/ 有效节点sys/devices/platform/这个目录下。
+	
+=====================================================================	
+
+9 
+
+	
+三星的GPIO系统官方文档：
+	Documentation/devicetree/bindings/gpio/gpio-samsung.txt
+
+1.2 pinctrl文档
+linux的pinctrl系统官方文档：
+	Documentation/devicetree/bindings/pinctrl/pinctrl-bindings.txt
+
+三星的pinctrl系统官方文档：
+	Documentation/devicetree/bindings/pinctrl/samsung-pinctrl.txt
+	
+	可以去对比看看 为什么 内核有一份 SOC原厂 也需要提供一份；
+	
+	因为 内核 不负责 BSP的 电路板 描述！！！！
+	那个真的不归内核去管理 全世界 那么多 SOC 那么多 电路板 内办法统一， 只是提供了 我子系统 需要这样的接口 这样描述 比较好；
+	具体的	BSP 你们 SOC 的原厂的 人去描述 去设计 ， 不归内核的事情。
+	
+	可以理解为： SOC 对其用户 指定规则 而 LINUX内核 对SOC 指定规则；
+	
+	举个例子： 
+	Linux 不管你serial怎么去定义， 但是 你serial的编号 必须要 从 0-N-1开始编号 这些 一些管理的 规则 就是 内核 去提供的
+	Documentation/devicetree/bindings/pinctrl/pinctrl-bindings.txt 里面有
+
+																				================================================================	
+																				For example:
+
+																					/* For a client device requiring named states */
+																					device {
+																						pinctrl-names = "active", "idle"; //便于下面的 pinctrl-0 理解而已
+																						pinctrl-0 = <&state_0_node_a>;
+																						pinctrl-1 = <&state_1_node_a &state_1_node_b>;
+																					};
+
+																					/* For the same device if using state IDs */
+																					device {
+																						pinctrl-0 = <&state_0_node_a>;
+																						pinctrl-1 = <&state_1_node_a &state_1_node_b>;
+																					};
+																				==============================================================
+	这就说明了一个问题， 当设备树 注册 进 平台设备模型的时候 ， 子系统 也许 可以 无缝去兼容 之前 没有 设备树机制之前的 系统了。
+	子系统层次 是对 最底层的 再一次分层吧。
+	===========================================================================
+	
+===========================================================================
+10
+
+	-->include/generated/autoconf.h:164:#define CONFIG_LEDS_CTL 1
+	autoconf.h 这也就解释了 
+	实际上 menuconfig 会生成 两个文件 一个.config 一个autoconf.h
+	前者负责 makefile的文件编译 后者负责.c文件内容的编译。
+	-------------------
+	编译内核：make uImage
+	自动生成-> ① auto.conf ②autoconf.h(宏)
+	①-include include/config/auto.conf提供给顶层Makefile使用。
+	②include/linux/autoconf.h提供给内核C源码使用。
+	
+	=========================================================
+11
+	旧版的内核初始化过程 是把硬件的描述信息 全部放在 smdk4x12_devices这个结构体里面
+	
+	static void __init smdk4x12_machine_init(void) 这个初始化函数里面 
+	...
+	platform_add_devices(smdk4x12_devices, ARRAY_SIZE(smdk4x12_devices));
+
+	类比： 初始化函数序列 然后 添加进 初始化序列数组里面 挨个遍历 配合生成 的  autoconf.h
+	static struct platform_device *smdk4x12_devices[] __initdata = {
+	#ifdef CONFIG_S5P_DEV_ACE
+		&s5p_device_ace,
+	#endif
+		&exynos4_busfreq,
+	#ifdef CONFIG_SWITCH_GPIO
+			&headset_switch_device,
+	#endif
+		&s3c_device_gps,
+		//&smm6260_modem,
+
+	#ifdef CONFIG_MAX485_CTL
+		&s3c_device_max485_ctl ,
+	#endif
+
+	#ifdef CONFIG_LEDS_CTL
+		&s3c_device_leds_ctl,
+	#endif
+
+	#ifdef CONFIG_BUZZER_CTL
+		&s3c_device_buzzer_ctl,
+	#endif
+		
+	}

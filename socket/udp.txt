@@ -1,0 +1,84 @@
+
+
+UDP 和 TCP 通信过程不一样
+
+UDP 是没有 三次握手 和 四次挥手的
+	也就是说 
+	客户端 没有 connect(三次握手请求)
+	服务器 没有 accpet 处理
+	
+使用 sendto 以及 recvfrom进行交互
+
+服务器角度：
+	
+	while (1)
+	{
+		n = recvfrom(sockfd, buf, MAXLINE,0, (struct sockaddr *)&cliaddr, &cliaddr_len);
+		。。。。
+		n = sendto(sockfd, buf, n, 0, (struct sockaddr *)&cliaddr, sizeof(cliaddr));
+	}
+	
+客户端刚好相反：
+
+	while (1)
+	{
+		n = sendto(sockfd, buf, n, 0, (struct sockaddr *)&cliaddr, sizeof(cliaddr));
+		。。。。
+		n = recvfrom(sockfd, buf, MAXLINE,0, (struct sockaddr *)&cliaddr, &cliaddr_len);
+	}
+
+因为没有 双方没有保持链路
+	所以 每个数据包里面 都包含有 发送的ip地址
+供数据返回使用。
+
+服务器：
+	while (1) {
+		cliaddr_len = sizeof(cliaddr);
+		n = recvfrom(sockfd, buf, MAXLINE,0, (struct sockaddr *)&cliaddr, &cliaddr_len);
+		if (n == -1)
+			perror("recvfrom error");
+		printf("received from %s at PORT %d\n", 
+				inet_ntop(AF_INET, &cliaddr.sin_addr, str, sizeof(str)),
+				ntohs(cliaddr.sin_port));
+		for (i = 0; i < n; i++)
+			buf[i] = toupper(buf[i]);
+
+		n = sendto(sockfd, buf, n, 0, (struct sockaddr *)&cliaddr, sizeof(cliaddr));
+		if (n == -1)
+			perror("sendto error");
+	}
+
+--------------------------------
+
+客户端
+
+	while (fgets(buf, MAXLINE, stdin) != NULL) {
+		n = sendto(sockfd, buf, strlen(buf), 0, (struct sockaddr *)&servaddr, sizeof(servaddr));
+		if (n == -1)
+			perror("sendto error");
+		n = recvfrom(sockfd, buf, MAXLINE, 0, NULL, 0);
+		if (n == -1)
+			perror("recvfrom error");
+		write(STDOUT_FILENO, buf, n);
+	}
+	
+===========================
+
+	使用 nc -u 127.0.0.1 9527 来测试
+代码注意事项：
+
+	创建一个sock()
+	sockfd = socket(AF_INET, SOCK_DGRAM, 0); //还是 IPV4,块 而不是 流
+	
+	本质上就是 去open网卡
+	
+	sendto(sockfd, buf, strlen(buf), 0, (struct sockaddr *)&servaddr, sizeof(servaddr));
+	recvfrom(sockfd, buf, MAXLINE, 0, NULL, 0);//客户端 并不关心是谁 返回的
+	
+	服务器要保存 接收到的客户端地址
+	n = recvfrom(sockfd, buf, MAXLINE,0, (struct sockaddr *)&cliaddr, &cliaddr_len);
+	n = sendto(sockfd, buf, n, 0, (struct sockaddr *)&cliaddr, sizeof(cliaddr));
+	
+	=======================================================================
+	
+	

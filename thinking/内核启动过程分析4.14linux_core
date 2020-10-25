@@ -1,0 +1,417 @@
+
+概要：
+	主要跟踪了 内核
+	
+	
+	展开设备树----->如何迁移设备-------->如何迁移资源。
+	
+	平台总线何时注册------>平台设备 和 平台 资源何时创建;
+	
+	以上。
+	
+	内核的 C语言入口函数 E:\MyDrivers\miniLinux_RAR\itop4412_linux4.14\init\mian.c
+	
+	asmlinkage __visible void __init start_kernel(void) {
+		.....
+		setup_arch(&command_line); { // 完成 板子 信息绑定  就是 设备树信息的展开了 以及 系统的 运行环境
+			....
+			mdesc = setup_machine_fdt(__atags_pointer); {//传入 设备树地址
+
+			#if defined(CONFIG_ARCH_MULTIPLATFORM) || defined(CONFIG_ARM_SINGLE_ARMV7M)
+				DT_MACHINE_START(GENERIC_DT, "Generic DT based system")
+					.l2c_aux_val = 0x0,
+					.l2c_aux_mask = ~0x0,
+				MACHINE_END
+
+				mdesc_best = &__mach_desc_GENERIC_DT;
+			#endif //创建一个 通用的 machine_desc 对象 保存班级信息。以及设备树的地址等等 
+			
+			mdesc = of_flat_dt_match_machine(mdesc_best, arch_get_next_mach); {
+				....
+				pr_info("Machine model: %s\n", of_flat_dt_get_machine_name()); //什么时候回打印 
+				....
+			}
+			early_init_dt_scan_nodes();{  //保存 系统运行的 环境信息 以及 cpu的节点属性 和 内存信息。
+				/* Retrieve various information from the /chosen node */
+				of_scan_flat_dt(early_init_dt_scan_chosen, boot_command_line);
+
+				/* Initialize {size,address}-cells info */
+				of_scan_flat_dt(early_init_dt_scan_root, NULL);
+
+				/* Setup memory, calling early_init_dt_add_memory_arch */
+				of_scan_flat_dt(early_init_dt_scan_memory, NULL);				
+			}
+				
+			} //
+			...
+			unflatten_device_tree();{	//这里是关键 把设备树文件 迁移为 C语言描述的设备树 链表  或者 说 内核去创建设备树了
+				 * unflattens a device-tree, creating the tree of struct device_node. It also fills the "name" and "type"
+				__unflatten_device_tree(initial_boot_params, NULL, &of_root,
+							early_init_dt_alloc_memory_arch, false); {
+				
+						/* First pass, scan for size */
+						size = unflatten_dt_nodes(blob, NULL, dad, NULL);
+						.....
+						/* Allocate memory for the expanded device tree */
+						mem = dt_alloc(size + 4, __alignof__(struct device_node));
+						.....
+						/* Second pass, do actual unflattening */ 文件系统没开始吧？ 创建文件信息了吗？ 跟踪了一下 没有跑起来 
+						unflatten_dt_nodes(blob, mem, dad, mynodes);
+						.....
+				}//设备树 链表的形式保存在 内核中 
+
+				/* Get pointer to "/chosen" and "/aliases" nodes for use everywhere */
+				// of_alias_scan - Scan all properties of the 'aliases' node
+				// 别名的 作用 就是 去区分 同样设备 地址不同 串口1 串口2 这个是一类 通过这个节点 可以 获得 对应 的唯一id index 的简写 也可以是身份识别码的 简写。
+				of_alias_scan(early_init_dt_alloc_memory_arch); 
+
+				unittest_unflatten_overlay_base();		//没有 	
+			}
+			...
+		}
+		......
+		系统初始化 什么中断 什么文件系统 什么irq 什么进程 ....之类的 。
+		E:\MyDrivers\miniLinux_RAR\itop4412_linux4.14\init\main.c
+		
+		rest_init(); {
+			...
+			pid = kernel_thread(kernel_init, NULL, CLONE_FS); {
+				kernel_init_freeable(); {
+					...........
+					do_basic_setup(); { //此时 系统跑起来了 也就是 多线程 跑起来了 
+							cpuset_init_smp(); 
+							shmem_init(); //ramfs文件系统 线程
+							driver_init();//驱动模型 注册 {							
+								/* These are the core pieces */
+								devtmpfs_init();
+								devices_init();
+								buses_init();
+								classes_init();
+								firmware_init();
+								hypervisor_init();
+
+								/* These are also core pieces, but must come after the
+								 * core core pieces.
+								 */
+								platform_bus_init(); //平台总线 在这里注册的  也就是 先创建核心层的 后面 负责 创建 文件和 内容。
+								cpu_dev_init();
+								memory_dev_init();
+								container_dev_init();
+								of_core_init();
+							
+							}
+							init_irq_proc();
+							do_ctors(); //C++ 使用的吧？ 构造函数？
+							usermodehelper_enable();
+							do_initcalls();// {
+								int level;
+
+								for (level = 0; level < ARRAY_SIZE(initcall_levels) - 1; level++)  // 七个设备初始化区域 
+									do_initcall_level(level); 基本就和这个 打交道了  {
+										initcall_t *fn;
+
+										strcpy(initcall_command_line, saved_command_line);
+										parse_args(initcall_level_names[level],
+											   initcall_command_line, __start___param,
+											   __stop___param - __start___param,
+											   level, level,
+											   NULL, &repair_env_string);
+											   
+										for (fn = initcall_levels[level]; fn < initcall_levels[level+1]; fn++) //都是统一个类型的而已 只是 记住  不同等级的 边界而已 initcall_levels[level+1];
+											do_one_initcall(*fn);
+									}
+							}
+					}
+					...........
+				}
+				.....
+			}
+			...
+		}
+	}
+
+////////////假设内核已经展开了 那么接下来进入 主要的 模块初始化阶段了 ;
+
+	do_initcalls();终点 分析这个 孙子先 ;
+	
+	设备树 注册平台总线是在哪里呢？ 
+	现在进行追踪:
+	
+	解决了
+	现在看看 设备树 注册到内核 的函数是哪个？
+	不知道 先去 平台驱动看看.c 
+	//看看这个执行 等级 
+	
+	__define_initcall(fn, 3s) //是在这个层次 
+	arch_initcall_sync(of_platform_default_populate_init);
+	//这里就导致了 一个 问题 很明显 设备信息 比 驱动 更早注册 进来了。	
+		 驱 动 怎 么 去 寻 找 设 备 呢？
+	第二： 不一定 需要 通过 平台总线 去添加 设备进去 啊 
+		of_device_add(dev) 都是这个 设备添加进去的 指定设备的总线就好 
+		pdev->dev.bus = &platform_bus_type; 指定 文件的存放目录这个样子而已 。
+	第三： 匹配的时候 到底是去那个目录下 寻找设备的呢？ 
+			是去 IIC_BUS 还是什么其他的类型 要清楚 ;
+			
+		
+static int __init of_platform_default_populate_init(void)
+{
+	struct device_node *node;
+
+	if (!of_have_populated_dt())
+		return -ENODEV;
+
+	/*
+	 * Handle ramoops explicitly, since it is inside /reserved-memory,
+	 * which lacks a "compatible" property.
+	 */
+	node = of_find_node_by_path("/reserved-memory");
+	if (node) {
+		node = of_find_compatible_node(node, NULL, "ramoops");
+		if (node)
+			of_platform_device_create(node, NULL, NULL);
+	}
+
+	/* Populate everything else. */
+	of_platform_default_populate(NULL, NULL, NULL);//关键在这里 {
+			return of_platform_populate(root, of_default_bus_match_table, lookup,parent); {
+				struct device_node *child;
+				int rc = 0;
+
+				root = root ? of_node_get(root) : of_find_node_by_path("/");
+				if (!root)
+					return -EINVAL;
+
+				pr_debug("%s()\n", __func__);
+				pr_debug(" starting at: %pOF\n", root);
+				
+				/*  of_platform_device_create_pdata - Alloc, initialize and register an of_device  */
+				dev = of_platform_device_create_pdata(bus, bus_id, platform_data, parent); { //干活的是这个 函数 
+					struct platform_device *dev;
+
+					if (!of_device_is_available(np) || //如果 状态没 ok  或者 迁移状态存在 那么直接返回 NULL;
+						of_node_test_and_set_flag(np, OF_POPULATED)) //
+						return NULL;
+
+					dev = of_device_alloc(np, bus_id, parent); //完成 内存申请  以及平台设备的注册 和 资源的迁移 
+					if (!dev)
+						goto err_clear_flag;
+
+					dev->dev.bus = &platform_bus_type;
+					dev->dev.platform_data = platform_data;
+					of_msi_configure(&dev->dev, dev->dev.of_node);
+
+					if (of_device_add(dev) != 0) { //这里是 设备添加进入 设备模型的机制 也就是 添加进了 虚拟的文件系统里面
+						platform_device_put(dev);
+						goto err_clear_flag;
+					}
+
+					return dev;
+
+				err_clear_flag:
+					of_node_clear_flag(np, OF_POPULATED);
+					return NULL;				
+				}
+				if (!dev || !of_match_node(matches, bus))
+					return 0;				
+
+				for_each_child_of_node(root, child) {
+					rc = of_platform_bus_create(child, matches, lookup, parent, true); //这个是关键 { 这个是递归函数来的 一个链表 循环递归到底了 只要有子节点 都递归下去。
+						...
+						查询标记 当前节点没有创建 而且 具备 compatibility 属性.....
+						dev = of_platform_device_create_pdata(bus, bus_id, platform_data, parent);
+						.....
+					}
+					if (rc) {
+						of_node_put(child);
+						break;
+					}
+				}
+				of_node_set_flag(root, OF_POPULATED_BUS);
+
+				of_node_put(root);
+				return rc;
+			}
+	}
+
+	return 0;
+}
+
+
+========================
+cp xxx_defconfig .config 
+
+E:\MyDrivers\miniLinux_RAR\itop4412_linux4.14\include\config\auto.conf
+
+auto.config 和 .config 的差别是在 auto.config 里去掉了 .config 中的注释项目以及空格行，其它的都一样。
+include/generated/autoconf.h 头文件由内核本身使用，主要用来预处理 C 代码。比如在 .config 或 auto.conf 中定义要编译为模块的项
+=============================================================================================================================	
+	
+=============
+=====================================
+ 链接脚本 变量！！！！
+extern initcall_t __initcall_start[];
+extern initcall_t __initcall0_start[];
+extern initcall_t __initcall1_start[];
+extern initcall_t __initcall2_start[];
+extern initcall_t __initcall3_start[];
+extern initcall_t __initcall4_start[];
+extern initcall_t __initcall5_start[];
+extern initcall_t __initcall6_start[];
+extern initcall_t __initcall7_start[];
+extern initcall_t __initcall_end[];
+=================
+static initcall_t *initcall_levels[] __initdata = {
+	__initcall0_start,
+	__initcall1_start,
+	__initcall2_start,
+	__initcall3_start,
+	__initcall4_start,
+	__initcall5_start,
+	__initcall6_start,
+	__initcall7_start,
+	__initcall_end,
+};
+=================================
+/* Keep these in sync with initcalls in include/linux/init.h */
+static char *initcall_level_names[] __initdata = {
+	"early",
+	"core",
+	"postcore",
+	"arch",
+	"subsys",
+	"fs",
+	"device",
+	"late",
+};
+=============================
+
+
+
+/*
+ * A "pure" initcall has no dependencies on anything else, and purely
+ * initializes variables that couldn't be statically initialized.
+ *
+ * This only exists for built-in code, not for modules.
+ * Keep main.c:initcall_level_names[] in sync.
+ */
+#define pure_initcall(fn)		__define_initcall(fn, 0)
+
+#define core_initcall(fn)		__define_initcall(fn, 1)
+#define core_initcall_sync(fn)		__define_initcall(fn, 1s)
+
+#define postcore_initcall(fn)		__define_initcall(fn, 2)
+#define postcore_initcall_sync(fn)	__define_initcall(fn, 2s)
+
+#define arch_initcall(fn)		__define_initcall(fn, 3)
+#define arch_initcall_sync(fn)		__define_initcall(fn, 3s)
+
+#define subsys_initcall(fn)		__define_initcall(fn, 4)
+#define subsys_initcall_sync(fn)	__define_initcall(fn, 4s)
+
+#define fs_initcall(fn)			__define_initcall(fn, 5)
+#define fs_initcall_sync(fn)		__define_initcall(fn, 5s)
+
+#define rootfs_initcall(fn)		__define_initcall(fn, rootfs)
+
+#define device_initcall(fn)		__define_initcall(fn, 6)
+#define device_initcall_sync(fn)	__define_initcall(fn, 6s)
+
+#define late_initcall(fn)		__define_initcall(fn, 7)
+#define late_initcall_sync(fn)		__define_initcall(fn, 7s)
+
+#define __initcall(fn) device_initcall(fn)
+
+#define __exitcall(fn)						\
+	static exitcall_t __exitcall_##fn __exit_call = fn
+	
+======================== module_platform_driver ================================
+
+static struct platform_driver samsung_serial_driver = {
+	.probe		= s3c24xx_serial_probe,
+	.remove		= s3c24xx_serial_remove,
+	.id_table	= s3c24xx_serial_driver_ids,
+	.driver		= {
+		.name	= "samsung-uart",
+		.pm	= SERIAL_SAMSUNG_PM_OPS,
+		.of_match_table	= of_match_ptr(s3c24xx_uart_dt_match),
+	},
+};
+
+include/linux/platform_device.h
+
+module_platform_driver(samsung_serial_driver);
+
+=#define module_driver(__driver, __register, __unregister, ...) \
+static int __init __driver##_init(void) \
+{ \
+	return __register(&(__driver) , ##__VA_ARGS__); \
+} \
+module_init(__driver##_init); \
+
+
+======================================
+
+#define module_init(x)	__initcall(x);
+
+#define __initcall(fn) device_initcall(fn)
+
+#define device_initcall(fn)		__define_initcall(fn, 6)
+
+1、arch_initcall，level=3，用在arch级的初始化，比如machine_init，如目录/arch/arm/mach-s3cxx下。
+
+2、subsys_initcall，level=4，顾名思义，用在子系统中，比如IIC、SPI、USB、SD、PCI等子系统的初始化，如子系统的总线驱动中，目录/drivers/i2c/busses下。
+
+3、module_init，即device_initcall，level=6，用在设备驱动中，这个对于驱动开发者来说就比较熟悉了，用的比较多。
+
+
+这里 理解一下：
+
+	子系统的初始化 需要SOC平台的信息， 也就是 说 子系统的初始化 应该是在 设备树的设备信息  注册了平台总线之后 展开的
+	而 模块 又是 基于 各个子系统的 开发  比如 中断 比如 IIC总线  引脚 等等
+	所以 模块的 初始化 应该 是在子系统之后 初始化的
+	
+	平台总线 应该是 对 SOC 的一个抽象了
+
+这里表明 自己写的驱动 等级就是 先注册的驱动 而不是设备了 ;
+=========================================================
+
+===================================
+	
+	module_platform_driver(samsung_serial_driver); 一个宏 展开就是
+	module_init(xxx_init) {
+		......
+		registr_xxxx等。
+	}
+
+	
+	================函数的展开=============================
+
+unflatten_dt_nodes(blob, mem, dad, mynodes) {
+		for (offset = 0;
+	     offset >= 0 && depth >= initial_depth;
+	     offset = fdt_next_node(blob, offset, &depth)) { //要清楚 每一个 节点 被抽象成 信息 和 内容两部分 分两个区域排放在 设备树文件里面 ，因此 通过 循环扫描 节点头 和 节点尾部 就行了 可以统计个数
+		if (WARN_ON_ONCE(depth >= FDT_MAX_DEPTH))		// 嵌套深度 
+			continue;
+
+		fpsizes[depth+1] = populate_node(blob, offset, &mem,
+						 nps[depth],
+						 fpsizes[depth],
+						 &nps[depth+1], dryrun);
+		if (!fpsizes[depth+1])
+			return mem - base;
+
+		if (!dryrun && nodepp && !*nodepp)
+			*nodepp = nps[depth+1];
+		if (!dryrun && !root)
+			root = nps[depth+1];
+	}
+	
+}
+		fpsizes[depth+1] = populate_node(blob, offset, &mem,
+						 nps[depth],
+						 fpsizes[depth],
+						 &nps[depth+1], dryrun);{
+		。。。
+		populate_properties(blob, offset, mem, np, pathp, dryrun);
+		。。。
+		}

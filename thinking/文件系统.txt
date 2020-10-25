@@ -1,0 +1,13 @@
+内核从start_kernel到启动第一个用户程序的流程
+start_kernel-> rest_init->kernel_thread->kernel_init->>init_post->run_init_process("/sbin/init");
+介绍完文件系统的移植后 分析一下 linux 如何跟 第一个init进行交互的
+1、linux在初始化之后会执行init进程，而init进程会去挂载根文件系统，但INIT进程又在根文件系统上
+
+所有就出现了悖论。linux采取两步走的方式去解决这个问题
+
+其实 linux在挂载 根文件系统以前 挂载了一个临时的文件系统initrd.img init进程就在其中，然后init进程回去挂载
+
+挂载真正的文件系统然后在 umount initrd.img
+
+======================================================================================================
+

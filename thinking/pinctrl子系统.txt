@@ -1,0 +1,83 @@
+
+现在我想了解 linux内核子系统的机制？我应该看些什么呢？
+可以去看看设备树   设备树 SOC资料 以及 内核的pinctrl资料 和 博客
+
+===================================================================
+先看看 内核资料先
+
+
+
+
+
+先看看设备树怎么去描述 再看看怎么用：
+
+	所谓标号引用，就是在节点名称前加上标号:，
+	这样设备树的其他位置就能够通过&符号来调用/访问该节点，比如上面代码ir_recv节点中的gpio属性，就引用了gpio1标号处的节点
+	包含则是最基本的方式，比如我们要在i2c1接口添加一个i2c外设，那么就必须要在i2c1下面添加一个节点，
+	比如上面代码中的rtc: pcf8523@68 {} 
+
+=========================================在设备树文件里面==================================================================
+		leds_test_node:leds_test_node {
+                compatible = "leds_test";
+		status = "disabled";
+//        	gpios1 = <&gpl2 0 GPIO_ACTIVE_HIGH>;
+//		gpios2 = <&gpk1 1 GPIO_ACTIVE_HIGH>;
+        };
+		
+		leds_test_node: 引用标号
+
+======================================================================================================================		
+=================================在设备树文件里面====================================================
+&leds_test_node {
+    status = "okay";
+	pinctrl-names = "itop-leds1-on","itop-leds1-off";
+	pinctrl-0 = <&leds_gpios1_on>;
+	pinctrl-1 = <&leds_gpios1_off>;
+};
+=======================在 xxx-pinctrl.dtsi里面=======================================================
+		leds_gpios1{
+			leds_gpios1_on:leds_gpios1-on {
+				samsung,pins = "gpl2-0" ;
+				samsung,pin-function = <1>;
+				samsung,pin-val = <1>;
+				samsung,pin-pud = <EXYNOS_PIN_PULL_UP>;
+		};
+			leds_gpios1_off:leds_gpios1-off {
+				samsung,pins = "gpl2-0" ;
+				samsung,pin-function = <1>;
+				samsung,pin-val = <0>;
+				samsung,pin-pud = <EXYNOS_PIN_PULL_UP>;
+			};
+			=======================================================================
+			
+			================ 分层 无处不在 =========
+这里 分了 两层 BSP 里面 --和 --------------pincrtl.dtsi--------------------- 
+
+===========================================================================================
+itop4412_linux4.14\drivers\pinctrl\samsung目录下的pinctrl-samsung.c
+发现
+
+驱动 应该是 根据设备信息 把 设备配置为一种初始化的状态 至于 进程 有没有使用 这个是进程的事情
+因此 应该 应该有一个 匹配成功的 回调函数 prob由 驱动来实现
+
+static struct platform_driver samsung_pinctrl_driver = {
+	.probe		= samsung_pinctrl_probe,
+	.driver = {
+		.name	= "samsung-pinctrl",
+		.of_match_table = samsung_pinctrl_dt_match,
+		.suppress_bind_attrs = true,
+		.pm = &samsung_pinctrl_pm_ops,
+	},
+};
+
+static int __init samsung_pinctrl_drv_register(void)
+{
+	return platform_driver_register(&samsung_pinctrl_driver);
+}
+postcore_initcall(samsung_pinctrl_drv_register);
+
+=================================================================================
+请问， 驱动 和 设备信息 谁先注册 进入 内核 重要吗？
+	重要 也不 重要； 
+	从某种角度来讲， 关键在于 调用prob函数 而不是 谁先注册 谁后注册的问题。
+	========================================================================
