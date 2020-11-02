@@ -81,3 +81,73 @@ postcore_initcall(samsung_pinctrl_drv_register);
 	重要 也不 重要； 
 	从某种角度来讲， 关键在于 调用prob函数 而不是 谁先注册 谁后注册的问题。
 	========================================================================
+	一些数据结构：
+	struct samsung_pin_bank: represent a controller pin-bank.
+	
+	struct gpio_chip gpio_chip; // struct gpio_chip - abstract a GPIO controller
+	
+	
+	gpio_chip: GPIO chip of the bank.
+	所以说 有 4个bank 每个bank 里面有 多个 GPIO chip
+	
+
+E:\MyDrivers\miniLinux_RAR\linux-4.14.2_iTop-4412_scp\drivers\pinctrl\samsung\pinctrl-exynos-arm.c
+
+	总结： banks(复数) = gpio_part
+			bank(单数) = gpioa 这样 
+			至于 gpio_chip 应该是 对应 gpio层次的东西 不算是 pinctrl系统层次的东西了  
+			
+==================================================================================================
+=========================================================
+关于编译选项问题 :
+
+E:\MyDrivers\miniLinux_RAR\itop4412_linux4.14\include\generated\autoconf.h
+E:\MyDrivers\miniLinux_RAR\itop4412_linux4.14\include\config\auto.conf
+E:\MyDrivers\miniLinux_RAR\linux-4.14.2_iTop-4412_scp\.config
+
+怎么说呢 config的是  脚本文件 
+autoconf.h 是C语言形式的 文件 基本上 内核 代码逻辑的执行 看着就好 
+
+==========================================================================================
+
+查看auto config文件
+CONFIG_MODULES=y
+
+=====================================================================================================
+cp xxx_defconfig .config 
+
+E:\MyDrivers\miniLinux_RAR\itop4412_linux4.14\include\config\auto.conf
+
+auto.config 和 .config 的差别是在 auto.config 里去掉了 .config 中的注释项目以及空格行，其它的都一样。
+include/generated/autoconf.h 头文件由内核本身使用，主要用来预处理 C 代码。比如在 .config 或 auto.conf 中定义要编译为模块的项
+=========================================================================================================
+其中 include/generated/autoconf.h 
+
+其中 include/generated/autoconf.h 头文件由内核本身使用，主要用来预处理 C 代码。比如在 .config 或 auto.conf 中定义要编译为模块的项，如：
+CONFIG_DEBUG_NX_TEST=m
+在 autoconf.h 中会被定义为：
+#define CONFIG_DEBUG_NX_TEST_MODULE 1
+
+在 .config 或 auto.conf 后接字符串值的项，如：
+CONFIG_DEFCONFIG_LIST="/lib/modules/$UNAME_RELEASE/.config"
+在 autoconfig.h 中会被定义为：
+#define CONFIG_DEFCONFIG_LIST "/lib/modules/$UNAME_RELEASE/.config"
+
+同样对应于 int 型的项如 CONFIG_HZ=1000 在 autoconf.h 中被定义为 #define CONFIG_HZ 1000 。
+================================================================================
+首先，了解一下内核的配置编译过程会有什么文件产生：
+对内核进行配置的时候，我们通常会选择arch/arm/configs目录下相似的某一个defconfig文件：
+cp xxx_defconfig .config
+再make menuconfig重新配置自己需要的。
+这两个命令之后，会得到你需要的.config文件。
+而auto.conf和autoconf.h是在执行内核编译命令：
+make uImage或make zImage之后根据.config自动生成的。
+总体过程如下：
+生成.config
+编译内核：make uImage
+自动生成-> ① auto.conf ②autoconf.h(宏)
+①-include include/config/auto.conf提供给顶层Makefile使用。
+②include/linux/autoconf.h提供给内核C源码使用。
+============================================
+
+	
