@@ -172,4 +172,24 @@ date "+%Y-%m-%d %H-%M-%S "
  而 动态库 编译的时候 只是把 动态库的 头信息给编译进去 (符号等等)， 运行的 时候 整个函数库 加载进内存然后 查找调用
 
  ===============================================================================================
+ 
+ ==================================
+.o  和 .h  和 .c 的关系 起码得理解了
+=====================================
+编译允许没有 实现 有个符号就可以，
+但是连接不行 连接必须要有实现
+==========================================
+
+编译器 要知道 头文件 和 实现的位置 不然编译不出来
+
+arm-linux-gnueabihf-gcc -o upgrade_daemo.o -c upgrade_daemo.c -I/opt/gcc-linaro-arm-linux-gnueabihf-4.8-2014.04_linux/arm-linux-gnueabihf/include -I./inc -I../../lib/include -I../../A520/lib/include -I../../HAPlatform/Code/Devices/Arch/Win32/Include
+arm-linux-gnueabihf-gcc  -DWATCH_DOG_ENABLE -DA520 -I/opt/gcc-linaro-arm-linux-gnueabihf-4.8-2014.04_linux/arm-linux-gnueabihf/include -I./inc -I../../lib/include -I../../A520/lib/include -I../../HAPlatform/Code/Devices/Arch/Win32/Include -o upgrade_daemo ./upgrade_daemo.o -lpthread -lrt -lproc_msg -L../lib/lib
+./upgrade_daemo.o: In function `main':
+upgrade_daemo.c:(.text+0x1a): undefined reference to `_WatchdogDevInit'
+collect2: error: ld returned 1 exit status
+Makefile:25: recipe for target 'upgrade_daemo' failed
+make: *** [upgrade_daemo] Error 1
+========================================================================================================
+
+
 
