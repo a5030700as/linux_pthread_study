@@ -191,5 +191,9 @@ Makefile:25: recipe for target 'upgrade_daemo' failed
 make: *** [upgrade_daemo] Error 1
 ========================================================================================================
 
+find . -maxdepth 9 -type d 这样就可以去确定每一个 目录了 
+
+剩下就是 扫描这些目录的 .c文件进行编译？
+
 
 
