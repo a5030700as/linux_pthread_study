@@ -195,5 +195,28 @@ find . -maxdepth 9 -type d 这样就可以去确定每一个 目录了
 
 剩下就是 扫描这些目录的 .c文件进行编译？
 
+SRC_DIR = 	../../app \
+			../../../../firmware \
+			../../../../bsp \
+			../../../../../PlatformApp/DefaultApp \
+			../../../../../HAPlatform/Code/StandardLib \
+			../../../../../HAPlatform/Code/Devices \
+			../../../../../HAPlatform/Code/UI \
+			../../../../../HAPlatform/Code/Module/AppConfig \
+			../../../../../HAPlatform/Code/Module/QRcode \
+			../../../../../HAPlatform/Code/Module/CodeTest \
+			../../../../../HAPlatform/Code/Module/MotionDetection \
+			../../../../../HAPlatform/Code/Module/Media \
+			../../../../../HAPlatform/Code/Module/RTC 
+			
+SRC_DIRS = $(foreach dir,$(SRC_DIR), $(shell find $(dir) -maxdepth 9 -type d))
+
+SRC = $(foreach dir,$(SRC_DIRS),$(wildcard $(dir)/*.c))
+SRC_OBJ_FILES = $(patsubst %.c,%.o,$(SRC))
+
+SRC_FILES = $(notdir $(SRC))
+	  
+OBJ_FILES = $(patsubst %.c,%.o,$(SRC_FILES))
+OBJS = $(addprefix $(BULID_DIR)/A520/project/Standard/bulid/board/,$(SRC_OBJ_FILES))
 
 
