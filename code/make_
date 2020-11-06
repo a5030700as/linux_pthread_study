@@ -1,0 +1,135 @@
+SDK_LIBS=$(A520_SDK_PATH)/project/release/ipc/i5/101A/glibc/4.8.3/lib/dynamic
+SDK_LIBS_STATIC=$(patsubst %dynamic,%static,$(SDK_LIBS))
+PLAT_DEPENDENT_LIB= -lmi_sys -lmi_common 
+PLAT_DEPENDENT_LIB_EX= -lmi_disp -lmi_panel -lmi_divp -lmi_ai
+UI_LIBS= -lturbojpeg
+SDK_INCS=$(A520_SDK_PATH)/project/release/include
+LDFLAGS+=-L$(SDK_LIBS)  -L$(SDK_LIBS_STATIC)
+LDFLAGS+=-L$(PWD)/libpng -L$(PWD)/library/lib 
+STDLIBS:=  -lstdc++ -ldl  -lpthread -lm 
+FACEAILIBS:=  -lvideoai -lfaceai -lcjson -licloud -lproc_msg -lintercom
+SHELLLIBS= -lmctrl -lreadline -lncurses 
+LIBS:=-Wl,-Bstatic -Wl,-Bdynamic $(STDLIBS) ${UI_LIBS}  ${PLAT_DEPENDENT_LIB} ${PLAT_DEPENDENT_LIB_EX} ${FACEAILIBS} ${SHELLLIBS}
+UPGRADE_LIBS:=-Wl,-Bstatic -Wl,-Bdynamic $(STDLIBS) ${UI_LIBS}  ${PLAT_DEPENDENT_LIB} ${PLAT_DEPENDENT_LIB_EX} 
+CFLAGS:=-rdynamic -funwind-tables -I. -I$(SDK_INCS)
+CC:=arm-linux-gnueabihf-gcc
+STRIP = arm-linux-gnueabihf-strip
+
+BULID_DIR = obj
+SRC_DIR = 	../../app \
+			../../../../firmware \
+			../../../../bsp \
+			../../../../../PlatformApp/DefaultApp \
+			../../../../../HAPlatform/Code/StandardLib \
+			../../../../../HAPlatform/Code/Devices \
+			../../../../../HAPlatform/Code/UI \
+			../../../../../HAPlatform/Code/Module/AppConfig \
+			../../../../../HAPlatform/Code/Module/QRcode \
+			../../../../../HAPlatform/Code/Module/CodeTest \
+			../../../../../HAPlatform/Code/Module/MotionDetection \
+			../../../../../HAPlatform/Code/Module/Media \
+			../../../../../HAPlatform/Code/Module/RTC 
+			
+LDFLAGS+=-L../../../../lib/lib -L$(A520_LIB_PATH)/lib -L$(A520_SDK_PATH)/videoAI/out/lib
+
+SRC_DIRS = $(foreach dir,$(SRC_DIR), $(shell find $(dir) -maxdepth 9 -type d))
+
+INC = 	-I../../app/inc \
+		-I../../../../lib/include \
+		-I$(A520_LIB_PATH)/include \
+		-I../../../../../HAPlatform/Code \
+		-I../../../../../PlatformApp/inc \
+		-I../../../../../PlatformApp/ZDStack/Include \
+		-I../../../../firmware/inc \
+		-I../../../../bsp/inc
+
+UPGRADE_BULID_DIR=obj/upgrade
+
+UPGRADE_SRC_DIR = 	../../../../bsp \
+			../../../../upgrade \
+			../../../../../HAPlatform/Code/StandardLib \
+			../../../../../HAPlatform/Code/Devices \
+			../../../../../HAPlatform/Code/UI \
+			../../../../../HAPlatform/Code/Module/Upgrade \
+			../../../../../HAPlatform/Code/Module/MacInfo 
+			
+UPGRADE_SRC_DIRS = $(foreach dir,$(UPGRADE_SRC_DIR), $(shell find $(dir) -maxdepth 9 -type d))
+
+UPGRADE_INC = 	-I../../../../upgrade/inc \
+		-I../../../../lib/include \
+		-I$(A520_LIB_PATH)/include \
+		-I../../../../../HAPlatform/Code \
+		-I../../../../../PlatformApp/inc \
+		-I../../../../../PlatformApp/ZDStack/Include \
+		-I../../../../bsp/inc
+
+include BoardCfg
+
+SRC = $(foreach dir,$(SRC_DIRS),$(wildcard $(dir)/*.c))
+SRC_OBJ_FILES = $(patsubst %.c,%.o,$(SRC))
+
+SRC_FILES = $(notdir $(SRC))
+	  
+OBJ_FILES = $(patsubst %.c,%.o,$(SRC_FILES))
+OBJS = $(addprefix $(BULID_DIR)/A520/project/Standard/bulid/board/,$(SRC_OBJ_FILES))
+
+UPGRADE_SRC = $(foreach dir,$(UPGRADE_SRC_DIRS),$(wildcard $(dir)/*.c))
+UPGRADE_SRC_OBJ_FILES = $(patsubst %.c,%.o,$(UPGRADE_SRC))
+UPGRADE_OBJS = $(addprefix $(BULID_DIR)/upgrade/A520/project/Standard/bulid/board/,$(UPGRADE_SRC_OBJ_FILES))
+
+Target:=libuiapp.so
+UpgradeTarget:=upgrade
+
+.PHONY : all clean
+
+all:$(Target) install
+
+$(Target):$(BULID_DIR) $(OBJS)
+	$(CC) -D_GNU_SOURCE $(HA_DEFINE) -shared -fpic -o  $(Target) $(OBJS) $(CFLAGS) $(LDFLAGS) $(LIBS) $(INC)
+	$(STRIP) $(Target)
+
+$(BULID_DIR) : 
+	mkdir $(BULID_DIR)
+	mkdir $(BULID_DIR)/A520
+	mkdir $(BULID_DIR)/A520/project
+	mkdir $(BULID_DIR)/A520/project/Standard
+	mkdir $(BULID_DIR)/A520/project/Standard/bulid
+	mkdir $(BULID_DIR)/A520/project/Standard/bulid/board
+	mkdir $(BULID_DIR)/HAPlatform
+	mkdir $(BULID_DIR)/HAPlatform/Code
+	mkdir $(BULID_DIR)/HAPlatform/Code/Module
+	mkdir $(BULID_DIR)/PlatformApp
+	mkdir  $(addprefix $(BULID_DIR)/A520/project/Standard/bulid/board/,$(SRC_DIRS))
+
+$(OBJS) : $(BULID_DIR)/A520/project/Standard/bulid/board/%.o: %.c
+	$(CC) -D_GNU_SOURCE -DBULID_LIB $(BOARD_DEFINE) $(HA_DEFINE) $(CFLAGS) $(LIBS) $(INC) -c $(patsubst %.o,%.c,$(subst $(BULID_DIR)/A520/project/Standard/bulid/board/,,$@))  -o $@ -shared -fpic
+	
+upgrade:$(UpgradeTarget) install
+
+$(UpgradeTarget):$(UPGRADE_BULID_DIR) $(UPGRADE_OBJS)
+	$(CC) -D_GNU_SOURCE $(BOARD_DEFINE) -D UPGRADE_APP -o  $(UpgradeTarget) $(UPGRADE_OBJS) $(CFLAGS) $(LDFLAGS) $(UPGRADE_LIBS) $(UPGRADE_INC)
+	$(STRIP) $(UpgradeTarget)
+
+$(UPGRADE_BULID_DIR) : 
+	mkdir $(BULID_DIR) -p
+	mkdir $(BULID_DIR)/upgrade -p
+	mkdir $(BULID_DIR)/upgrade/A520 -p
+	mkdir $(BULID_DIR)/upgrade/A520/project -p
+	mkdir $(BULID_DIR)/upgrade/A520/project/Standard -p
+	mkdir $(BULID_DIR)/upgrade/A520/project/Standard/bulid -p
+	mkdir $(BULID_DIR)/upgrade/A520/project/Standard/bulid/board -p
+	mkdir $(BULID_DIR)/upgrade/HAPlatform -p
+	mkdir $(BULID_DIR)/upgrade/HAPlatform/Code -p
+	mkdir $(BULID_DIR)/PlatformApp -p
+	mkdir  $(addprefix $(BULID_DIR)/upgrade/A520/project/Standard/bulid/board/,$(UPGRADE_SRC_DIRS)) -p
+
+$(UPGRADE_OBJS) : $(BULID_DIR)/upgrade/A520/project/Standard/bulid/board/%.o: %.c
+	$(CC) -D_GNU_SOURCE $(BOARD_DEFINE) -D UPGRADE_APP $(CFLAGS) $(UPGRADE_LIBS) $(UPGRADE_INC) -c $(patsubst %.o,%.c,$(subst $(BULID_DIR)/upgrade/A520/project/Standard/bulid/board/,,$@))  -o $@
+
+
+clean:
+	rm -rf $(BULID_DIR)
+	rm $(Target)
+	rm -rf $(UpgradeTarget)
+install:
+	@echo done!
