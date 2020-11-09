@@ -1,3 +1,56 @@
+
+
+
+
+
+ROOT_DIR := $(shell pwd)
+
+SUB_DIR := $(shell find . -maxdepth 5 -type d)
+#SUB_DIR_NAMES := $(nodir $(SUB_DIR))
+BULID_DIR := build
+
+SRC_DIR := a_module b_module 
+#SRC_DIRS = $(foreach dir,$(UPGRADE_SRC_DIR), $(shell find $(dir) -maxdepth 9 -type d))
+#获取源码目录全称
+SRC := $(foreach dir,$(SRC_DIR),$(wildcard $(dir)/*.c))
+#全路径源码对象
+SRC_OBJ_FILES = $(patsubst %.c,%.o,$(SRC))
+#源码名称
+SRC_FILES = $(notdir $(SRC))
+#对象名称
+OBJ_FILES = $(patsubst %.c,%.o,$(SRC_FILES))
+#输出路径
+OBJS = $(addprefix $(BULID_DIR)/,$(SRC_OBJ_FILES))
+
+.PHONY : all clean  diu 
+
+all : main 
+
+main : $(SRC_DIR) $(OBJS)
+	gcc -o $@ $(OBJS)
+
+$(SRC_DIR) : 
+	@echo 根目录$(ROOT_DIR)
+	@echo 子目录$(SUB_DIR)
+	mkdir $(ROOT_DIR)/$(BULID_DIR) -p
+	@echo 源码目录$(SRC_DIR)
+	@echo 源码全名字$(SRC)
+	@echo 对象全名$(SRC_OBJ_FILES)
+	@echo 源码名$(SRC_FILES)
+	@echo 对象名$(OBJ_FILES)
+	@echo 指定输出对象名字$(OBJS)
+	mkdir  $(addprefix $(BULID_DIR)/,$(SRC)) -p
+
+$(OBJS) : $(BULID_DIR)/%.o : %.c
+	gcc -c $< -o $@
+
+clean :
+	rm -rf build
+
+
+
+
+=====================================================================
 SDK_LIBS=$(A520_SDK_PATH)/project/release/ipc/i5/101A/glibc/4.8.3/lib/dynamic
 SDK_LIBS_STATIC=$(patsubst %dynamic,%static,$(SDK_LIBS))
 PLAT_DEPENDENT_LIB= -lmi_sys -lmi_common 
