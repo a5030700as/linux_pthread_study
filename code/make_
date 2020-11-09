@@ -25,11 +25,11 @@ OBJS = $(addprefix $(BULID_DIR)/,$(SRC_OBJ_FILES))
 .PHONY : all clean  diu 
 
 all : main 
-
-main : $(SRC_DIR) $(OBJS)
+#应该是顶层目录 而不是 各个子目录 无法执行 如果是子目录 也不知道为什么
+main : $(BULID_DIR) $(OBJS)
 	gcc -o $@ $(OBJS)
 
-$(SRC_DIR) : 
+$(BULID_DIR) : 
 	@echo 根目录$(ROOT_DIR)
 	@echo 子目录$(SUB_DIR)
 	mkdir $(ROOT_DIR)/$(BULID_DIR) -p
